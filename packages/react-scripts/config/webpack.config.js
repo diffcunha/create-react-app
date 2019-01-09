@@ -14,6 +14,7 @@ const webpack = require('webpack');
 const resolve = require('resolve');
 const PnpWebpackPlugin = require('pnp-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 const CaseSensitivePathsPlugin = require('case-sensitive-paths-webpack-plugin');
 const InlineChunkHtmlPlugin = require('react-dev-utils/InlineChunkHtmlPlugin');
 const TerserPlugin = require('terser-webpack-plugin');
@@ -49,6 +50,9 @@ const cssRegex = /\.css$/;
 const cssModuleRegex = /\.module\.css$/;
 const sassRegex = /\.(scss|sass)$/;
 const sassModuleRegex = /\.module\.(scss|sass)$/;
+
+const cesiumSource = path.resolve(paths.cesium, 'Source');
+const cesiumWorkers = '../Build/Cesium/Workers';
 
 // This is the production and development configuration.
 // It is focused on developer experience, fast rebuilds, and a minimal bundle.
@@ -152,6 +156,7 @@ module.exports = function(webpackEnv) {
       // We include the app code last so that if there is a runtime error during
       // initialization, it doesn't blow up the WebpackDevServer client, and
       // changing JS code would still trigger a refresh.
+      path.resolve(cesiumSource, 'Widgets/widgets.css'),
     ].filter(Boolean),
     output: {
       // The build folder.
@@ -178,6 +183,12 @@ module.exports = function(webpackEnv) {
               .replace(/\\/g, '/')
         : isEnvDevelopment &&
           (info => path.resolve(info.absoluteResourcePath).replace(/\\/g, '/')),
+      // Needed to compile multiline strings in Cesium
+      sourcePrefix: '',
+    },
+    amd: {
+      // Enable webpack-friendly use of require in Cesium
+      toUrlUndefined: true,
     },
     optimization: {
       minimize: isEnvProduction,
@@ -275,6 +286,8 @@ module.exports = function(webpackEnv) {
         // Support React Native Web
         // https://www.smashingmagazine.com/2016/08/a-glimpse-into-the-future-with-react-native-for-web/
         'react-native': 'react-native-web',
+        // Cesium module name
+        cesium: path.resolve(cesiumSource, 'Cesium.js'),
       },
       plugins: [
         // Adds support for installing with Plug'n'Play, leading to faster installs and adding
@@ -323,6 +336,22 @@ module.exports = function(webpackEnv) {
             },
           ],
           include: paths.appSrc,
+        },
+        // Strip cesium pragmas
+        {
+          test: /\.js$/,
+          enforce: 'pre',
+          include: cesiumSource,
+          use: [
+            {
+              loader: require.resolve('strip-pragma-loader'),
+              options: {
+                pragmas: {
+                  debug: false,
+                },
+              },
+            },
+          ],
         },
         {
           // "oneOf" will traverse all following loaders until one will
@@ -543,6 +572,16 @@ module.exports = function(webpackEnv) {
             : undefined
         )
       ),
+      // Copy Cesium Assets, Widgets, and Workers to a static directory
+      new CopyWebpackPlugin([
+        { from: path.join(cesiumSource, cesiumWorkers), to: 'Cesium/Workers' },
+      ]),
+      new CopyWebpackPlugin([
+        { from: path.join(cesiumSource, 'Assets'), to: 'Cesium/Assets' },
+      ]),
+      new CopyWebpackPlugin([
+        { from: path.join(cesiumSource, 'Widgets'), to: 'Cesium/Widgets' },
+      ]),
       // Inlines the webpack runtime script. This script is too small to warrant
       // a network request.
       isEnvProduction &&
@@ -563,7 +602,12 @@ module.exports = function(webpackEnv) {
       // It is absolutely essential that NODE_ENV is set to production
       // during a production build.
       // Otherwise React will be compiled in the very slow development mode.
-      new webpack.DefinePlugin(env.stringified),
+      new webpack.DefinePlugin(
+        Object.assign(env.stringified, {
+          // Define relative base path in cesium for loading assets
+          CESIUM_BASE_URL: JSON.stringify('Cesium'),
+        })
+      ),
       // This is necessary to emit hot updates (currently CSS only):
       isEnvDevelopment && new webpack.HotModuleReplacementPlugin(),
       // Watcher doesn't work well if you mistype casing in a path so we use

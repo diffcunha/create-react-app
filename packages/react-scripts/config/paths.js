@@ -98,6 +98,7 @@ const resolveOwn = relativePath => path.resolve(__dirname, '..', relativePath);
 // config before eject: we're in ./node_modules/react-scripts/config/
 module.exports = {
   dotenv: resolveApp('.env'),
+  cesium: resolveApp('node_modules/cesium'),
   appPath: resolveApp('.'),
   appBuild: resolveApp('build'),
   appPublic: resolveApp('public'),
@@ -132,6 +133,7 @@ if (
 ) {
   module.exports = {
     dotenv: resolveOwn('template/.env'),
+    // cesium: resolveApp('node_modules/cesium'),
     appPath: resolveApp('.'),
     appBuild: resolveOwn('../../build'),
     appPublic: resolveOwn('template/public'),
